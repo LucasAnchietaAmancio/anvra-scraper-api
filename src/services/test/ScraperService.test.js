@@ -9,17 +9,36 @@ jest.mock("axios");
 describe("ScraperService", () => {
     let sut;
 
-    const SEARCH_URL = "https://maps.googleapis.com/maps/api/place/textsearch/json";
-    const DETAILS_URL = "https://maps.googleapis.com/maps/api/place/details/json";
+    const originalApiKey = process.env.GOOGLE_API_KEY; 
 
     beforeEach(() => {
-        sut = new ScraperService(axios, SEARCH_URL, DETAILS_URL);
+
+        process.env.GOOGLE_API_KEY = originalApiKey || 'FAKE_API_KEY'; 
+        sut = new ScraperService(axios, process.env.GOOGLE_SEARCH_URL, process.env.GOOGLE_DETAILS_URL);
         jest.clearAllMocks();
+    });
+
+    afterEach(() => {
+
+        process.env.GOOGLE_API_KEY = originalApiKey;
     });
 
     test("Deve lançar erro caso dependências não sejam informadas", () => {
         expect(() => new ScraperService()).toThrow(AppError);
     });
+
+    test("Deve lançar AppError se GOOGLE_API_KEY não estiver configurada", () => {
+        delete process.env.GOOGLE_API_KEY;
+        expect(() => 
+            new ScraperService(axios, "search", "details")
+        ).toThrow(
+            expect.objectContaining({
+                code: "ENV_NOT_CONFIGURED",
+                status: 500
+            })
+        );
+    });
+
 
     test("Deve retornar uma lista de place_ids válida", async () => {
         axios.get.mockResolvedValue({
@@ -45,7 +64,7 @@ describe("ScraperService", () => {
         ).rejects.toBeInstanceOf(AppError);
     });
 
-    test("Deve lançar AppError quando o Google retornar error_message", async () => {
+    test("Deve lançar AppError quando o Google retornar error_message (getPlaceId)", async () => {
         axios.get.mockResolvedValue({
             data: {
                 error_message: "Invalid API Key"
@@ -57,10 +76,16 @@ describe("ScraperService", () => {
                 region: "-16.47,-54.63",
                 query: "teste"
             })
-        ).rejects.toBeInstanceOf(AppError);
+        ).rejects.toEqual(
+            expect.objectContaining({
+                code: "GOOGLE_API_ERROR",
+                status: 400
+            })
+        );
     });
 
-    test("Deve lançar AppError quando axios disparar erro", async () => {
+
+    test("Deve lançar AppError (503) quando axios disparar erro (getPlaceId)", async () => {
         axios.get.mockRejectedValue(new Error("Network Error"));
 
         await expect(
@@ -68,52 +93,85 @@ describe("ScraperService", () => {
                 region: "-16.47,-54.63",
                 query: "teste"
             })
-        ).rejects.toBeInstanceOf(AppError);
+        ).rejects.toEqual(
+            expect.objectContaining({
+                code: "EXTERNAL_API_CALL_FAILED",
+                status: 503
+            })
+        );
     });
 
-    test("Deve retornar detalhes de empresas ao receber place_ids válidos", async () => {
-        axios.get.mockResolvedValue({
-            data: {
-                result: { name: "Empresa Teste" }
-            }
-        });
 
-        const output = await sut.getDetailCompany(["abc123"]);
+    test("Deve retornar detalhes de empresas ao receber place_ids válidos (Promise.all)", async () => {
 
-        expect(output).toEqual([{ name: "Empresa Teste" }]);
+        axios.get
+            .mockResolvedValueOnce({ data: { result: { name: "Empresa Teste 1" } } })
+            .mockResolvedValueOnce({ data: { result: { name: "Empresa Teste 2" } } });
+            
+        const placeIds = ["abc123", "xyz789"];
+        const output = await sut.getDetailCompany(placeIds);
+
+        expect(output).toHaveLength(2);
+        expect(output).toEqual([
+            { name: "Empresa Teste 1" }, 
+            { name: "Empresa Teste 2" }
+        ]);
+
+        expect(axios.get).toHaveBeenCalledTimes(2); 
     });
 
     test("Deve lançar AppError quando Google retornar error_message nos detalhes", async () => {
-        axios.get.mockResolvedValue({
+
+        axios.get.mockResolvedValueOnce({
             data: {
                 error_message: "Place ID inválido"
             }
         });
 
+
+        
         await expect(
-            sut.getDetailCompany(["abc123"])
-        ).rejects.toBeInstanceOf(AppError);
+            sut.getDetailCompany(["abc123", "xyz789"])
+        ).rejects.toEqual(
+            expect.objectContaining({
+                code: "GOOGLE_API_ERROR",
+                status: 400
+            })
+        );
     });
 
-    test("Deve lançar AppError quando axios falhar nos detalhes", async () => {
+    test("Deve lançar AppError (503) quando axios falhar nos detalhes", async () => {
+
         axios.get.mockRejectedValue(new Error("Network Error"));
 
         await expect(
             sut.getDetailCompany(["abc123"])
-        ).rejects.toBeInstanceOf(AppError);
+        ).rejects.toEqual(
+            expect.objectContaining({
+                code: "EXTERNAL_API_CALL_FAILED",
+                status: 503
+            })
+        );
     });
 
     test("Deve executar o fluxo completo e retornar detalhes finais", async () => {
+
         axios.get
             .mockResolvedValueOnce({
                 data: {
-                    results: [{ place_id: "testeid123" }]
+                    results: [{ place_id: "testeid1" }, { place_id: "testeid2" }]
                 }
             })
 
             .mockResolvedValueOnce({
                 data: {
-                    result: { name: "Empresa Completa" }
+                    result: { name: "Empresa Completa 1" }
+                }
+            })
+            
+            .mockResolvedValueOnce({
+                data: {
+                    result: { name: "Empresa Completa 2" }
                 }
             });
 
@@ -122,6 +180,11 @@ describe("ScraperService", () => {
             query: "empresa"
         });
 
-        expect(output).toEqual([{ name: "Empresa Completa" }]);
+        expect(axios.get).toHaveBeenCalledTimes(3); 
+        expect(output).toHaveLength(2);
+        expect(output).toEqual([
+            { name: "Empresa Completa 1" },
+            { name: "Empresa Completa 2" }
+        ]);
     });
 });

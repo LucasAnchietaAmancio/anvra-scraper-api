@@ -1,20 +1,42 @@
-const axios = require("axios");
+const express = require("express");
 const dotenv = require("dotenv");
-dotenv.config();
+const axios = require("axios");
+const helmet = require("helmet");
+const rateLimit = require("express-rate-limit");
+const cors = require("cors");
 
 const ScraperService = require("./src/services/ScraperService");
+const ScraperController = require("./src/controllers/ScraperController");
+const scraperRoutes = require("./src/routes/ScraperRoutes");
+const ErrorHandler = require("./src/middlewares/errors/ErrorHandler")
+
+dotenv.config();
+
+const app = express();
+const PORT = process.env.PORT || 3000; 
+
+app.use(express.json());
+app.use(helmet());
+app.use(cors());
+app.use(rateLimit({
+    windowMs: 60 * 1000,
+    max: 20
+}));    
+
+const http = axios.create({
+    timeout: 8000
+});
 
 const scraperService = new ScraperService(
-    axios,
-    process.env.GOOGLE_SEARCH_URL,
-    process.env.GOOGLE_DETAILS_URL
+    http,
+    process.env.GOOGLE_SEARCH_URL,
+    process.env.GOOGLE_DETAILS_URL
 );
 
-(async () => {
-    const data = await scraperService.getFullDataFromGoogle({
-        region: "-16.4708,-54.6350",
-        query: "Loja de tintas"
-    });
+const scraperController = new ScraperController(scraperService);
 
-    console.log(JSON.stringify(data, null, 2));
-})();
+app.use("/api", scraperRoutes(scraperController));
+
+app.use(ErrorHandler); 
+
+app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
