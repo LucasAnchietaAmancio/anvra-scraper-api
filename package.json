@@ -1,0 +1,31 @@
+{
+  "name": "anvra-scraper-api",
+  "version": "1.0.0",
+  "description": "",
+  "main": "ScrapingService.js",
+  "scripts": {
+    "test": "jest",
+    "start": "node server.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/LucasAnchietaAmancio/anvra-scraper-api.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/LucasAnchietaAmancio/anvra-scraper-api/issues"
+  },
+  "homepage": "https://github.com/LucasAnchietaAmancio/anvra-scraper-api#readme",
+  "dependencies": {
+    "axios": "^1.13.2",
+    "cors": "^2.8.5",
+    "dotenv": "^17.2.3",
+    "express": "^5.1.0",
+    "express-rate-limit": "^8.2.1",
+    "helmet": "^8.1.0",
+    "jest": "^30.2.0"
+  }
+}
