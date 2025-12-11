@@ -43,25 +43,24 @@ class ScraperService {
      * Busca todos os place_ids que correspondem à pesquisa no Google Maps.
      * @param {string} params.region Latitude e longitude no formato: "-16.4,-54.6".
      * @param {string} params.query Termo pesquisado: "empresa logística", "transportadora", etc.
+     * @param {string} params.nextpagetoken Token de paginação: "'AZLasHq4iSvR4tUF4...'"
      * @returns {Promise<string[]>} Lista de place_ids.
      * @throws {AppError} Caso dados obrigatórios não sejam fornecidos (400).
      * @throws {AppError} Caso a API do Google retorne erro de negócio (400).
      * @throws {AppError} Caso haja falha de comunicação ou infraestrutura (503).
      */
-    async getPlaceIdFromGoogle({ region, query }) {
+    async getPlaceIdFromGoogle({ region, query, nextpagetoken }) {
         if (!region || !query) {
             throw AppError.dataRequiredNotProvided();
         }
 
         try {
-            const response = await this.http.get(this.searchUrl, {
-                params: {
-                    query,
-                    location: region,
-                    key: process.env.GOOGLE_API_KEY
-                }
-            });
+            const params = nextpagetoken ? {pagetoken: nextpagetoken, key: process.env.GOOGLE_API_KEY} : {query, location:region, key: process.env.GOOGLE_API_KEY}
 
+            const response = await this.http.get(this.searchUrl, {
+                params
+            });
+            
             const data = response.data;
 
             if (data.error_message) {
@@ -73,7 +72,10 @@ class ScraperService {
                 );
             }
 
-            return data.results.map((item) => item.place_id);
+            return {
+                placeID:response.data.results.map((item) => item.place_id),
+                nextPage: response.data.next_page_token
+            } 
 
         } catch (error) {
             const msg = this._extractErrorMessage(error);
@@ -94,13 +96,14 @@ class ScraperService {
      * @throws {AppError} Caso o Google retorne erro de negócio para algum ID específico (400).
      * @throws {AppError} Caso haja falha de comunicação ou infraestrutura no bloco Promise.all (503).
      */
-    async getDetailCompany(placeIds) {
+    async getDetailCompany(placeIds,nextPage) {
         try {
             const detailPromises = placeIds.map(place_id => 
                 this.http.get(this.detailsUrl, {
                     params: {
                         place_id,
-                        key: process.env.GOOGLE_API_KEY
+                        key: process.env.GOOGLE_API_KEY,
+                        fields:"name,formatted_address,place_id,type,formatted_phone_number,website,rating,user_ratings_total"
                     }
                 })
             );
@@ -118,10 +121,13 @@ class ScraperService {
                         400
                     );
                 }
-                return response.data.result;
+                return response.data.result
             });
 
-            return detailsList;
+            return {
+                    next_page:nextPage,
+                    results:detailsList,
+                };
 
         } catch (error) {
             const msg = this._extractErrorMessage(error);
@@ -141,10 +147,11 @@ class ScraperService {
      * @param {string} params.query Termo de busca.
      * @returns {Promise<object[]>} Lista detalhada de empresas em JSON.
      */
-    async getFullDataFromGoogle({ region, query }) {
-        const placeIds = await this.getPlaceIdFromGoogle({ region, query });
+    async getFullDataFromGoogle({ region, query, nextpagetoken }) {
 
-        const details = await this.getDetailCompany(placeIds);
+        const { placeID, nextPage } = await this.getPlaceIdFromGoogle({ region, query, nextpagetoken });
+
+        const details = await this.getDetailCompany(placeID, nextPage);
 
         return details;
     }

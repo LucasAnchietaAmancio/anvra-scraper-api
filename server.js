@@ -19,12 +19,12 @@ app.use(express.json());
 app.use(helmet());
 app.use(cors());
 app.use(rateLimit({
-    windowMs: 60 * 1000,
-    max: 20
+windowMs: 60 * 1000,
+max: 20
 }));    
 
 const http = axios.create({
-    timeout: 8000
+timeout: 15000
 });
 
 const scraperService = new ScraperService(

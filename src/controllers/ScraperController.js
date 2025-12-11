@@ -24,7 +24,7 @@ class ScraperController {
      * @param {object} res Objeto de resposta do Express
      */
     async getDataFromSearch(req, res) { 
-        const { region, query } = req.body;
+        const { region, query, nextpagetoken } = req.query;
 
         if (!region || !query) {
             throw AppError.dataRequiredNotProvided();
@@ -32,12 +32,13 @@ class ScraperController {
 
         const data = await this.scraperService.getFullDataFromGoogle({
             region,
-            query
+            query,
+            nextpagetoken,
         });
 
         return res.status(200).json({
             success: true,
-            total: data.length,
+            total: data.results.length,
             data
         });
     }
