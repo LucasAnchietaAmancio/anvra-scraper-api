@@ -1,4 +1,5 @@
 const { Router } = require("express");
+
 const AuthMiddleware = require("../middlewares/AuthMiddleware");
 
 /**
@@ -20,7 +21,7 @@ module.exports = function scraperRoutes(scraperController) {
      * @route POST /search
      * @description Busca empresas no Google Maps com base na região e query fornecidas.
      */
-    router.post("/search", scraperController.getDataFromSearch);
+    router.post("/v1/search", scraperController.getDataFromSearch);
 
     return router;
 };
